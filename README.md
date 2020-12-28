@@ -1,117 +1,68 @@
-![Tests](https://github.com/nginx-proxy/docker-letsencrypt-nginx-proxy-companion/workflows/Tests/badge.svg)
-[![GitHub release](https://img.shields.io/github/release/nginx-proxy/docker-letsencrypt-nginx-proxy-companion.svg)](https://github.com/nginx-proxy/docker-letsencrypt-nginx-proxy-companion/releases)
-[![Image info](https://images.microbadger.com/badges/image/jrcs/letsencrypt-nginx-proxy-companion.svg)](https://hub.docker.com/r/jrcs/letsencrypt-nginx-proxy-companion "Click to view the image on Docker Hub")
-[![Docker stars](https://img.shields.io/docker/stars/jrcs/letsencrypt-nginx-proxy-companion.svg)](https://hub.docker.com/r/jrcs/letsencrypt-nginx-proxy-companion "Click to view the image on Docker Hub")
-[![Docker pulls](https://img.shields.io/docker/pulls/jrcs/letsencrypt-nginx-proxy-companion.svg)](https://hub.docker.com/r/jrcs/letsencrypt-nginx-proxy-companion "Click to view the image on Docker Hub")
+[![](https://img.shields.io/docker/pulls/alexanderkrause/rpi-letsencrypt-nginx-proxy-companion.svg)](https://hub.docker.com/r/alexanderkrause/rpi-letsencrypt-nginx-proxy-companion "Click to view the image on Docker Hub")
 
-**letsencrypt-nginx-proxy-companion** is a lightweight companion container for [**nginx-proxy**](https://github.com/nginx-proxy/nginx-proxy).
+This is a [**fork**](https://github.com/Alexander-Krause/rpi-docker-letsencrypt-nginx-proxy-companion) that enables usage on a armhf architecture (tested on RPI 3). Have a look at Yves Blusseau's [original](https://github.com/JrCs/docker-letsencrypt-nginx-proxy-companion) repository and README. The following part does not include all available options of the original project.
 
-It handles the automated creation, renewal and use of Let's Encrypt certificates for proxied Docker containers.
+### Why do you want to use this?
+Reasons and examples for using a reverse proxy are discussed [by Jason Wilder](http://jasonwilder.com/blog/2014/03/25/automated-nginx-reverse-proxy-for-docker/) or [here](https://stackoverflow.com/a/366212/3250397).
+With this companion container for automatically creating/renewing *Let's Encrypt certificates* you can host and expose your dockerized TLS-secured applications on a Raspberry Pi. Examples:
 
-**Required read if you use the `latest` version** : the recent `v2.0.0` release of this project mark the switch of the ACME client used by the Docker image from [**simp.le**](https://github.com/zenhack/simp_le) to [**acme.sh**](https://github.com/acmesh-official/acme.sh). This switch result in some backward incompatible changes, so please read [this issue](https://github.com/nginx-proxy/docker-letsencrypt-nginx-proxy-companion/issues/510) and the updated docs for more details before updating your image. The single most important change is that the container now requires a volume mounted to `/etc/acme.sh` in order to persist ACME account keys and SSL certificates. The last tagged version that uses **simp_le** is `v1.13.1`.
+* [Home Assistant](https://www.home-assistant.io/) with a custom nginx template for your sweet home automation (*tested*)
+* [Nextcloud](https://github.com/nextcloud/docker) with [Passman](https://github.com/nextcloud/passman) extension and [MySQL](https://github.com/hypriot/rpi-mysql) (*tested*)
+* [Nginx](https://github.com/armhf-docker-library/nginx) hosting your web sites (*tested*)
+* Own Mailserver, e.g. [tomav/docker-mailserver](https://github.com/tomav/docker-mailserver), [hardware/mailserver](https://github.com/hardware/mailserver) or [Poste.io](https://poste.io/) (*not tested*)
 
-### Features:
-* Automated creation/renewal of Let's Encrypt (or other ACME CAs) certificates using [**acme.sh**](https://github.com/acmesh-official/acme.sh).
-* Let's Encrypt / ACME domain validation through `http-01` challenge only.
-* Automated update and reload of nginx config on certificate creation/renewal.
-* Support creation of [Multi-Domain (SAN) Certificates](https://github.com/nginx-proxy/docker-letsencrypt-nginx-proxy-companion/blob/master/docs/Let's-Encrypt-and-ACME.md#multi-domains-certificates).
-* Creation of a Strong Diffie-Hellman Group at startup.
-* Work with all versions of docker.
+### How to use
+Built image is hosted on [Dockerhub](https://hub.docker.com/r/alexanderkrause/rpi-letsencrypt-nginx-proxy-companion). Declare three writable volumes for the [rpi-nginx-proxy](https://github.com/Alexander-Krause/rpi-nginx-proxy) container:
+* `/etc/nginx/certs` to create/renew Let's Encrypt certificates
+* `/etc/nginx/vhost.d` to change the configuration of vhosts (needed by Let's Encrypt)
+* `/usr/share/nginx/html` to write challenge files.
 
-### Requirements:
-* Your host **must** be publicly reachable on **both** port `80` and `443`.
-* Check your firewall rules and **do not attempt to block port `80`** as that will prevent `http-01` challenges from completing.
-* For the same reason, you can't use nginx-proxy's [`HTTPS_METHOD=nohttp`](https://github.com/nginx-proxy/nginx-proxy#how-ssl-support-works).
-* The (sub)domains you want to issue certificates for must correctly resolve to the host.
-* Your DNS provider must [answer correctly to CAA record requests](https://letsencrypt.org/docs/caa/).
-* If your (sub)domains have AAAA records set, the host must be publicly reachable over IPv6 on port `80` and `443`.
+Exemplary usage:
 
-![schema](https://github.com/nginx-proxy/docker-letsencrypt-nginx-proxy-companion/blob/master/schema.png)
-
-## Basic usage (with the nginx-proxy container)
-
-Three writable volumes must be declared on the **nginx-proxy** container so that they can be shared with the **letsencrypt-nginx-proxy-companion** container:
-
-* `/etc/nginx/certs` to store certificates and private keys (readonly for the **nginx-proxy** container).
-* `/etc/nginx/vhost.d` to change the configuration of vhosts (required so the CA may access `http-01` challenge files).
-* `/usr/share/nginx/html` to write `http-01` challenge files.
-
-Additionally, a fourth volume must be declared on the **letsencrypt-nginx-proxy-companion** container to store `acme.sh` configuration and state: `/etc/acme.sh`.
-
-Please also read the doc about [data persistence](./docs/persistent-data.md).
-
-Example of use:
-
-### Step 1 - nginx-proxy
-
-Start **nginx-proxy** with the three additional volumes declared:
-
-```shell
-$ docker run --detach \
+* First start nginx with the 3 volumes declared (you need to build this image as shown in the respective repository):
+```bash
+$ docker run -d -p 80:80 -p 443:443 \
     --name nginx-proxy \
-    --publish 80:80 \
-    --publish 443:443 \
-    --volume /etc/nginx/certs \
-    --volume /etc/nginx/vhost.d \
-    --volume /usr/share/nginx/html \
-    --volume /var/run/docker.sock:/tmp/docker.sock:ro \
-    jwilder/nginx-proxy
+    -v /path/to/certs:/etc/nginx/certs:ro \
+    -v /etc/nginx/vhost.d \
+    -v /usr/share/nginx/html \
+    -v /var/run/docker.sock:/tmp/docker.sock:ro \
+    --label com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy \
+    alexanderkrause/rpi-nginx-proxy
 ```
+The "com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy" label is needed so that the letsencrypt container knows which nginx proxy container to use.
 
-Binding the host docker socket (`/var/run/docker.sock`) inside the container to `/tmp/docker.sock` is a requirement of **nginx-proxy**.
-
-### Step 2 - letsencrypt-nginx-proxy-companion
-
-Start the **letsencrypt-nginx-proxy-companion** container, getting the volumes from **nginx-proxy** with `--volumes-from`:
-
-```shell
-$ docker run --detach \
-    --name nginx-proxy-letsencrypt \
+* Second start this container:
+```bash
+$ docker run -d \
+    --name nginx-letsencrypt \
+    -v /usr/ssl:/etc/nginx/certs:rw \
+    -v /var/run/docker.sock:/var/run/docker.sock:ro \
     --volumes-from nginx-proxy \
-    --volume /var/run/docker.sock:/var/run/docker.sock:ro \
-    --volume /etc/acme.sh \
-    --env "DEFAULT_EMAIL=mail@yourdomain.tld" \
-    jrcs/letsencrypt-nginx-proxy-companion
+    alexanderkrause/rpi-letsencrypt-nginx-proxy-companion
 ```
 
-The host docker socket has to be bound inside this container too, this time to `/var/run/docker.sock`.
+Then start any containers you want proxied with a env var `VIRTUAL_HOST=yourdomain.com`, e.g.
 
-Albeit **optional**, it is **recommended** to provide a valid default email address through the `DEFAULT_EMAIL` environment variable, so that Let's Encrypt can warn you about expiring certificates and allow you to recover your account.
-
-### Step 3 - proxied container(s)
-
-Once both **nginx-proxy** and **letsencrypt-nginx-proxy-companion** containers are up and running, start any container you want proxied with environment variables `VIRTUAL_HOST` and `LETSENCRYPT_HOST` both set to the domain(s) your proxied container is going to use.
-
-[`VIRTUAL_HOST`](https://github.com/nginx-proxy/nginx-proxy#usage) control proxying by **nginx-proxy** and `LETSENCRYPT_HOST` control certificate creation and SSL enabling by **letsencrypt-nginx-proxy-companion**.
-
-Certificates will only be issued for containers that have both `VIRTUAL_HOST` and `LETSENCRYPT_HOST` variables set to domain(s) that correctly resolve to the host, provided the host is publicly reachable.
-
-```shell
-$ docker run --detach \
-    --name your-proxied-app \
-    --env "VIRTUAL_HOST=subdomain.yourdomain.tld" \
-    --env "LETSENCRYPT_HOST=subdomain.yourdomain.tld" \
-    nginx
+```bash
+$ docker run -d \
+    --name example-app \
+    -e "VIRTUAL_HOST=example.com" \
+    -e "LETSENCRYPT_HOST=example.com" \
+    -e "LETSENCRYPT_EMAIL=foo@bar.com" \
+    tutum/apache-php
 ```
 
-The containers being proxied must expose the port to be proxied, either by using the `EXPOSE` directive in their Dockerfile or by using the `--expose` flag to `docker run` or `docker create`.
+#### Regarding Certificate Aquiring
+The acquiring of a certificate requires a nginx-reverse-proxy container with a mapping of the default ports, i.e.,  '80:80' and '443:443', as shown above. If you don't want to expose those ports, you need to apply a workaround:
 
-If the proxied container listen on and expose another port than the default `80`, you can force **nginx-proxy** to use this port with the [`VIRTUAL_PORT`](https://github.com/nginx-proxy/nginx-proxy#multiple-ports) environment variable.
+Initially start a nginx-reverse-proxy container as shown below with those port mappings, then shutdown all three containers (reverse-proxy, companion and your application). Remove the reverse-proxy container and start a new one with your desired port mappings, e.g. '5050:80' and '5060:443'. Finally, start the companion and your application container.
 
-Example using [Grafana](https://hub.docker.com/r/grafana/grafana/) (expose and listen on port 3000):
+### How to build the image yourself
+1. Clone this repository `$ git clone https://github.com/Alexander-Krause/rpi-docker-letsencrypt-nginx-proxy-companion.git`
+2. `$ cd rpi-docker-letsencrypt-nginx-proxy-companion`
+3. `$ docker build -t alexanderkrause/rpi-docker-letsencrypt-nginx-proxy-companion:latest .`
 
-```shell
-$ docker run --detach \
-    --name grafana \
-    --env "VIRTUAL_HOST=othersubdomain.yourdomain.tld" \
-    --env "VIRTUAL_PORT=3000" \
-    --env "LETSENCRYPT_HOST=othersubdomain.yourdomain.tld" \
-    --env "LETSENCRYPT_EMAIL=mail@yourdomain.tld" \
-    grafana/grafana
-```
+### DynDNS
+Tested with [duckdns](https://www.duckdns.org) as DynDNS provider. Configure the update url in your router or device (with [ddclient](https://sourceforge.net/p/ddclient/wiki/Home/)) and (!) enable port forwarding (e.g. 443 of your Pi / docker container) in your router. Do the steps from above and enter `yourducksubdomain.duckdns.org` in `VIRTUAL_HOST` and `LETSENCRYPT_HOST`.
 
-Repeat [Step 3](#step-3---proxied-containers) for any other container you want to proxy.
-
-## Additional documentation
-
-Please check the [docs section](https://github.com/nginx-proxy/docker-letsencrypt-nginx-proxy-companion/tree/master/docs) or the [project's wiki](https://github.com/nginx-proxy/docker-letsencrypt-nginx-proxy-companion/wiki).

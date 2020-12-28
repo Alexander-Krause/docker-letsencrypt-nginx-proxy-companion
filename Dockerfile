@@ -1,4 +1,5 @@
-FROM golang:1.15.6-alpine AS go-builder
+# All credit goes to Yves Blusseau, Nicolas Duchon, and all the contributors of the original Github repository
+FROM arm32v7/golang:1.15.6-alpine AS go-builder
 
 ENV DOCKER_GEN_VERSION=0.7.4
 
@@ -19,9 +20,9 @@ RUN apk add --no-cache --virtual .build-deps \
     && rm -rf /go/src \
     && apk del .build-deps
 
-FROM alpine:3.12.3
+FROM arm32v7/alpine:3.12.3
 
-LABEL maintainer="Nicolas Duchon <nicolas.duchon@gmail.com> (@buchdag)"
+LABEL maintainer="Alexander Krause <akr@informatik.uni-kiel.de>"
 
 ARG GIT_DESCRIBE
 ARG ACMESH_VERSION=2.8.8
