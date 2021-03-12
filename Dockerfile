@@ -1,5 +1,5 @@
 # All credit goes to Yves Blusseau, Nicolas Duchon, and all the contributors of the original Github repository
-FROM arm32v7/golang:1.15.6-alpine AS go-builder
+FROM arm32v7/golang:1.16.2-alpine AS go-builder
 
 ENV DOCKER_GEN_VERSION=0.7.4
 
