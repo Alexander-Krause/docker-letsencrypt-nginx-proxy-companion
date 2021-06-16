@@ -20,7 +20,7 @@ RUN apk add --no-cache --virtual .build-deps \
     && rm -rf /go/src \
     && apk del .build-deps
 
-FROM arm32v7/alpine:3.12.3
+FROM arm32v7/alpine:3.14.0
 
 LABEL maintainer="Alexander Krause <akr@informatik.uni-kiel.de>"
 
